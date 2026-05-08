@@ -1,0 +1,31 @@
+# =============================================================================
+# Grafana Data Source Provisioning
+# =============================================================================
+# Automatically configures Prometheus as a data source when Grafana starts.
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      manageAlerts: true
+      alertmanagerUid: alertmanager
+    
+  - name: Alertmanager
+    type: alertmanager
+    uid: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      implementation: prometheus

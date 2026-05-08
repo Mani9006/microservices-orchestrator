@@ -1,0 +1,214 @@
+# =============================================================================
+# Docker Compose - Development Overrides
+# =============================================================================
+# Development-specific overrides that extend the base configuration.
+# These settings optimize for developer experience with hot-reload,
+# exposed ports, debug mode, and development tools.
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # -------------------------------------------------------------------------
+  # PostgreSQL - Development
+  # -------------------------------------------------------------------------
+  postgres:
+    ports:
+      - "5432:5432"  # Expose for local development tools
+    environment:
+      POSTGRES_PASSWORD: postgres  # Simple password for dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Development data persistence
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # SQL seed files for development
+      - ./services/postgres/seeds/:/docker-entrypoint-initdb.d/seeds/:ro
+
+  # -------------------------------------------------------------------------
+  # Redis - Development
+  # -------------------------------------------------------------------------
+  redis:
+    ports:
+      - "6379:6379"  # Expose for local Redis clients
+    environment:
+      # No password in development for convenience
+      ALLOW_EMPTY_PASSWORD: "yes"
+    command: >
+      redis-server
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Redis Commander for GUI access
+    labels:
+      - "traefik.enable=false"
+
+  # -------------------------------------------------------------------------
+  # Redis Commander (Redis GUI for development)
+  # -------------------------------------------------------------------------
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ms-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+    depends_on:
+      - redis
+    profiles:
+      - tools  # Only started with: docker compose --profile tools up
+
+  # -------------------------------------------------------------------------
+  # API - Development
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      target: development  # Use development stage with hot-reload
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      SECRET_KEY: dev-secret-key
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/microservices
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: text
+      DB_POOL_SIZE: 5
+      DB_MAX_OVERFLOW: 10
+    volumes:
+      # Mount source for hot-reload
+      - ./services/api/src:/app/src:ro
+      - ./services/api/tests:/app/tests:ro
+      # Persistent logs
+      - api_logs:/app/logs
+    ports:
+      - "5000:5000"
+    # Override command for development hot-reload
+    command: >
+      flask --app src/app.py run --host=0.0.0.0 --port=5000 --reload
+    # Enable interactive debugging
+    stdin_open: true
+    tty: true
+
+  # -------------------------------------------------------------------------
+  # Worker - Development
+  # -------------------------------------------------------------------------
+  worker:
+    build:
+      target: development
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_WORKER_CONCURRENCY: 2
+      CELERY_TASK_TIME_LIMIT: 300
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: text
+      API_URL: http://api:5000
+      WORKER_PORT: 5001
+    volumes:
+      - ./services/worker/src:/app/src:ro
+      - ./services/worker/tests:/app/tests:ro
+      - worker_logs:/app/logs
+    ports:
+      - "5001:5001"
+    stdin_open: true
+    tty: true
+
+  # -------------------------------------------------------------------------
+  # Beat - Development
+  # -------------------------------------------------------------------------
+  beat:
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./services/worker/src:/app/src:ro
+
+  # -------------------------------------------------------------------------
+  # Nginx - Development
+  # -------------------------------------------------------------------------
+  nginx:
+    ports:
+      - "80:80"
+      - "8080:8080"
+    # Development: use HTTP only (no SSL)
+    environment:
+      - NGINX_ENV=development
+
+  # -------------------------------------------------------------------------
+  # Flower - Celery Monitoring (Development)
+  # -------------------------------------------------------------------------
+  flower:
+    image: mher/flower:2.0
+    container_name: ms-flower
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      FLOWER_UNAUTHENTICATED_API: "true"
+    ports:
+      - "5555:5555"
+    networks:
+      - backend
+    depends_on:
+      - redis
+      - worker
+    profiles:
+      - tools
+
+  # -------------------------------------------------------------------------
+  # Adminer - Database Admin Tool (Development)
+  # -------------------------------------------------------------------------
+  adminer:
+    image: adminer:4
+    container_name: ms-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8082:8080"
+    networks:
+      - backend
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+  # -------------------------------------------------------------------------
+  # Mailhog - Email Capture (Development)
+  # -------------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: ms-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - backend
+    profiles:
+      - tools
+
+# ---------------------------------------------------------------------------
+# Networks (inherit from base)
+# ---------------------------------------------------------------------------
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: false  # Allow external access in development

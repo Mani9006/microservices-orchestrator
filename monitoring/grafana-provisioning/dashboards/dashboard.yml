@@ -1,0 +1,19 @@
+# =============================================================================
+# Grafana Dashboard Provisioning
+# =============================================================================
+# Automatically loads the microservices dashboard when Grafana starts.
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'Microservices Dashboards'
+    orgId: 1
+    folder: 'Microservices'
+    folderUid: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
