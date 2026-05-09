@@ -1,0 +1,9 @@
+flowchart LR
+    Nginx[Nginx Reverse Proxy] --> API[Flask API]
+    API --> DB[(PostgreSQL)]
+    API --> Redis[(Redis)]
+    API --> Celery[Celery Worker]
+    Celery --> DB
+    Celery --> Redis
+    Prom[Prometheus] -.scrape.-> API
+    Prom -.scrape.-> Celery

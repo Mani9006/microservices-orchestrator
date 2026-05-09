@@ -435,3 +435,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with**: Docker, Python, Flask, Celery, PostgreSQL, Redis, Nginx, Prometheus, Grafana
+
+---
+
+<!-- showcase:start -->
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Nginx[Nginx Reverse Proxy] --> API[Flask API]
+    API --> DB[(PostgreSQL)]
+    API --> Redis[(Redis)]
+    API --> Celery[Celery Worker]
+    Celery --> DB
+    Celery --> Redis
+    Prom[Prometheus] -.scrape.-> API
+    Prom -.scrape.-> Celery
+```
+
+## Test Results
+
+![Test results](docs/test_results.png)
+
+_This project is configuration-focused (Terraform / Kubernetes manifests / Docker Compose / PWA). Validation runs via the project's native tooling rather than a unit-test suite._
+
+## References & Further Reading
+
+- Newman, S. (2015). *Building Microservices.* O'Reilly.
+- Burns, B. & Oppenheimer, D. (2016). *Design patterns for container-based distributed systems.* HotCloud-16. [↗](https://www.usenix.org/conference/hotcloud16/workshop-program/presentation/burns)
+
+## Author
+
+**Manikanta Reddy Mandadhi** — Senior Data Scientist (RAG / Agentic AI)
+
+GitHub: [@Mani9006](https://github.com/Mani9006/microservices-orchestrator) · LinkedIn: [reddy1999](https://www.linkedin.com/in/reddy1999) · Portfolio: [manikantabio.com](https://www.manikantabio.com)
+
+<!-- showcase:end -->
